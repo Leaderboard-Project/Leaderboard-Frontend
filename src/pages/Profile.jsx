@@ -22,7 +22,10 @@ export default function Profile() {
   useEffect(() => {
     Promise.all([api.get(`/api/users/${username}`), api.get('/api/labs')]).then(([profileData, labsData]) => {
       setProfile(profileData.data.user);
-      setLabs(labsData.data.labs);
+      setLabs(Array.isArray(labsData.data.labs) ? labsData.data.labs : []);
+    }).catch(() => {
+      setProfile(null);
+      setLabs([]);
     });
   }, [username]);
 
@@ -37,7 +40,7 @@ export default function Profile() {
       .filter((submission) => submission.reviewStatus === 'approved')
       .map((submission) => [String(submission.labId?._id), submission])
   );
-  const sideQuests = profile.badges?.filter((badge) => badge.item) || [];
+  const sideQuests = Array.isArray(profile.badges) ? profile.badges.filter((badge) => badge.item) : [];
   const approvedLabs = labAchievements.filter((submission) => submission.reviewStatus === 'approved').length;
   const totalAchievements = approvedLabs + sideQuests.length;
 

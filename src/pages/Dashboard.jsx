@@ -13,12 +13,12 @@ export default function Dashboard() {
     Promise.all([api.get('/api/leaderboard'), api.get('/api/labs'), api.get('/api/submissions')]).then(
       ([leaderboard, labs, submissions]) => {
         setStats({
-          users: leaderboard.data.users,
-          labs: labs.data.labs,
-          submissions: submissions.data.submissions
+          users: Array.isArray(leaderboard.data.users) ? leaderboard.data.users : [],
+          labs: Array.isArray(labs.data.labs) ? labs.data.labs : [],
+          submissions: Array.isArray(submissions.data.submissions) ? submissions.data.submissions : []
         });
       }
-    );
+    ).catch(() => setStats({ users: [], labs: [], submissions: [] }));
   }, []);
 
   const leader = stats.users[0];

@@ -20,9 +20,12 @@ export default function Leaderboard({ preview = false }) {
   useEffect(() => {
     api
       .get('/api/leaderboard', { params: { limit: preview ? 5 : 50 } })
-      .then(({ data }) => setUsers(data.users))
+      .then(({ data }) => setUsers(Array.isArray(data.users) ? data.users : []))
       .catch(() => setUsers([]));
-    api.get('/api/achievements').then(({ data }) => setAchievements(data.achievements)).catch(() => {});
+    api
+      .get('/api/achievements')
+      .then(({ data }) => setAchievements(Array.isArray(data.achievements) ? data.achievements : []))
+      .catch(() => setAchievements([]));
   }, [preview]);
 
   const totalUnlocked = users.reduce((sum, user) => sum + (user.achievements?.length || 0), 0);

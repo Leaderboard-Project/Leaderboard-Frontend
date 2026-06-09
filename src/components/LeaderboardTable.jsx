@@ -13,46 +13,50 @@ const titles = [
 
 const titleFor = (points = 0) => titles.find((item) => points >= item.min) || titles.at(-1);
 const progressFor = (user) => {
-  const unlocked = user.achievements?.length || 0;
-  const total = 8;
+  const completed = user.labProgress?.completed ?? user.achievements?.length ?? 0;
+  const total = user.labProgress?.totalActiveLabs ?? 0;
   return {
-    unlocked,
+    completed,
     total,
-    percent: Math.min((unlocked / total) * 100, 100)
+    percent: total ? Math.min((completed / total) * 100, 100) : 0
   };
 };
 
 export default function LeaderboardTable({ users = [] }) {
   return (
     <div className="arena-list">
-      {users.map((user, index) => (
-        <motion.div
-          className="arena-player-row"
-          key={user._id || user.username}
-          initial={{ opacity: 0, x: -24 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: index * 0.04 }}
-          whileHover={{ scale: 1.01 }}
-        >
-          <Link className="arena-player-link" to={`/profile/${user.username}`}>
-            <div className={`rank-ribbon rank-${index < 2 ? 'purple' : 'green'}`}>
-              <span>{titleFor(user.totalPoints).badge === 'star' ? '★' : '✦'}</span>
-            </div>
-            <img className="arena-avatar" src={resolveAvatar(user.avatarUrl)} alt={user.username} />
-            <div className="arena-player-info">
-              <strong>{user.displayName || user.username}</strong>
-              <span>{titleFor(user.totalPoints).label}</span>
-              <div className="arena-progress-line">
-                <i style={{ width: `${progressFor(user).percent}%` }} />
-                <em>
-                  {progressFor(user).unlocked}/{progressFor(user).total}
-                </em>
+      {users.map((user, index) => {
+        const progress = progressFor(user);
+
+        return (
+          <motion.div
+            className="arena-player-row"
+            key={user._id || user.username}
+            initial={{ opacity: 0, x: -24 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.04 }}
+            whileHover={{ scale: 1.01 }}
+          >
+            <Link className="arena-player-link" to={`/profile/${user.username}`}>
+              <div className={`rank-ribbon rank-${index < 2 ? 'purple' : 'green'}`}>
+                <span>{titleFor(user.totalPoints).badge === 'star' ? '★' : '✦'}</span>
               </div>
-            </div>
-            <strong className="arena-points">{user.totalPoints}<small>PTS</small></strong>
-          </Link>
-        </motion.div>
-      ))}
+              <img className="arena-avatar" src={resolveAvatar(user.avatarUrl)} alt={user.username} />
+              <div className="arena-player-info">
+                <strong>{user.displayName || user.username}</strong>
+                <span>{titleFor(user.totalPoints).label}</span>
+                <div className="arena-progress-line">
+                  <i style={{ width: `${progress.percent}%` }} />
+                  <em>
+                    {progress.completed}/{progress.total}
+                  </em>
+                </div>
+              </div>
+              <strong className="arena-points">{user.totalPoints}<small>PTS</small></strong>
+            </Link>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

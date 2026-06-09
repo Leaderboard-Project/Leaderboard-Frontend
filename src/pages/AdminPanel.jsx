@@ -53,8 +53,11 @@ export default function AdminPanel() {
   const [message, setMessage] = useState('');
   const [activeSection, setActiveSection] = useState('overview');
   const [assigningBadge, setAssigningBadge] = useState(null);
+  const [assigningLab, setAssigningLab] = useState(null);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [selectedAssignedUsers, setSelectedAssignedUsers] = useState([]);
+  const [selectedLabUsers, setSelectedLabUsers] = useState([]);
+  const [selectedAssignedLabUsers, setSelectedAssignedLabUsers] = useState([]);
   const [reviewFilter, setReviewFilter] = useState('all');
   const [reviewLabFilter, setReviewLabFilter] = useState('all');
   const [busyAction, setBusyAction] = useState('');
@@ -69,11 +72,11 @@ export default function AdminPanel() {
       api.get('/api/badges'),
       api.get('/api/admin/logs')
     ]);
-    setLabs(labData.labs);
-    setSubmissions(submissionData.submissions);
-    setUsers(userData.users);
-    setBadges(badgeData.badges);
-    setLogs(logData.logs);
+    setLabs(Array.isArray(labData.labs) ? labData.labs : []);
+    setSubmissions(Array.isArray(submissionData.submissions) ? submissionData.submissions : []);
+    setUsers(Array.isArray(userData.users) ? userData.users : []);
+    setBadges(Array.isArray(badgeData.badges) ? badgeData.badges : []);
+    setLogs(Array.isArray(logData.logs) ? logData.logs : []);
   };
 
   useEffect(() => {
@@ -185,8 +188,9 @@ export default function AdminPanel() {
     try {
       setBusyAction('sync-all');
       const { data } = await api.post('/api/labs/sync');
-      const created = data.results.reduce((sum, item) => sum + item.created, 0);
-      const failed = data.results.filter((item) => item.failed);
+      const results = Array.isArray(data.results) ? data.results : [];
+      const created = results.reduce((sum, item) => sum + item.created, 0);
+      const failed = results.filter((item) => item.failed);
       setMessage(
         failed.length
           ? `${created} new PRs synced. Failed: ${failed.map((item) => item.lab?.title).join(', ')}`
@@ -298,6 +302,12 @@ export default function AdminPanel() {
     setSelectedAssignedUsers([]);
   };
 
+  const openAssignLab = (lab) => {
+    setAssigningLab(lab);
+    setSelectedLabUsers([]);
+    setSelectedAssignedLabUsers([]);
+  };
+
   const toggleSelectedUser = (id) => {
     setSelectedUsers((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -306,6 +316,18 @@ export default function AdminPanel() {
 
   const toggleSelectedAssignedUser = (id) => {
     setSelectedAssignedUsers((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectedLabUser = (id) => {
+    setSelectedLabUsers((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  };
+
+  const toggleSelectedAssignedLabUser = (id) => {
+    setSelectedAssignedLabUsers((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
     );
   };
@@ -348,6 +370,44 @@ export default function AdminPanel() {
     }
   };
 
+  const assignLab = async () => {
+    if (!assigningLab || !selectedLabUsers.length) return;
+    try {
+      setBusyAction('assign-lab');
+      const { data } = await api.post(`/api/admin/labs/${assigningLab._id}/assign`, {
+        userIds: selectedLabUsers
+      });
+      setMessage(data.message);
+      setAssigningLab(null);
+      setSelectedLabUsers([]);
+      setSelectedAssignedLabUsers([]);
+      load();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Lab assign failed.');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const unassignLab = async () => {
+    if (!assigningLab || !selectedAssignedLabUsers.length) return;
+    try {
+      setBusyAction('unassign-lab');
+      const { data } = await api.post(`/api/admin/labs/${assigningLab._id}/unassign`, {
+        userIds: selectedAssignedLabUsers
+      });
+      setMessage(data.message);
+      setAssigningLab(null);
+      setSelectedLabUsers([]);
+      setSelectedAssignedLabUsers([]);
+      load();
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Lab remove failed.');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   const deleteBadge = async (id) => {
     await api.delete(`/api/admin/badges/${id}`);
     setMessage('Side quest deleted.');
@@ -362,6 +422,12 @@ export default function AdminPanel() {
   });
   const hasAssignedBadge = (user, badge) =>
     user.badges?.some((entry) => String(entry.item?._id || entry.item) === String(badge?._id));
+  const hasAssignedLab = (user, lab) =>
+    submissions.some((submission) =>
+      String(submission.userId?._id || submission.userId) === String(user?._id) &&
+      String(submission.labId?._id || submission.labId) === String(lab?._id) &&
+      (submission.reviewStatus || 'pending') === 'approved'
+    );
 
   if (!admin) {
     return (
@@ -375,7 +441,6 @@ export default function AdminPanel() {
           <label>
             Username
             <input
-              value={loginForm.username}
               onChange={(event) => setLoginForm({ ...loginForm, username: event.target.value })}
             />
           </label>
@@ -383,7 +448,6 @@ export default function AdminPanel() {
             Password
             <input
               type="password"
-              value={loginForm.password}
               onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
             />
           </label>
@@ -541,6 +605,7 @@ export default function AdminPanel() {
                   </div>
                   <b>{lab.points} XP</b>
                   <div className="crm-actions">
+                    <button onClick={() => openAssignLab(lab)}>Assign</button>
                     <button onClick={() => syncLab(lab._id)} disabled={busyAction === `sync-lab-${lab._id}`}>
                       {busyAction === `sync-lab-${lab._id}` ? 'Syncing...' : 'Sync'}
                     </button>
@@ -814,6 +879,58 @@ export default function AdminPanel() {
               </button>
               <button className="crm-primary-button" onClick={assignBadge} disabled={!selectedUsers.length || busyAction === 'assign-sidequest'}>
                 {busyAction === 'assign-sidequest' ? 'Assigning...' : `Assign to ${selectedUsers.length || 0}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {assigningLab && (
+        <div className="crm-modal-backdrop" role="presentation" onClick={() => setAssigningLab(null)}>
+          <div className="crm-modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+            <div className="crm-panel-heading">
+              <div>
+                <span className="crm-kicker">Assign lab</span>
+                <h2>{renderIcon(assigningLab.icon, 'ðŸ§ª')} {assigningLab.title}</h2>
+              </div>
+              <span className="crm-count">{assigningLab.points || 0} XP</span>
+            </div>
+            <div className="crm-assign-list">
+              {users.map((user) => {
+                const alreadyAssigned = hasAssignedLab(user, assigningLab);
+                return (
+                  <label className={`crm-assign-user ${alreadyAssigned ? 'assigned' : ''}`} key={user._id}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        alreadyAssigned
+                          ? selectedAssignedLabUsers.includes(user._id)
+                          : selectedLabUsers.includes(user._id)
+                      }
+                      onChange={() =>
+                        alreadyAssigned
+                          ? toggleSelectedAssignedLabUser(user._id)
+                          : toggleSelectedLabUser(user._id)
+                      }
+                    />
+                    <img src={resolveAvatar(user.avatarUrl)} alt={user.username} />
+                    <span>
+                      <strong>{user.displayName || user.username}</strong>
+                      <small>
+                        @{user.username} - {user.totalPoints} XP{alreadyAssigned ? ' - assigned, select to remove' : ''}
+                      </small>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="crm-modal-actions">
+              <button className="crm-ghost-button" onClick={() => setAssigningLab(null)}>Cancel</button>
+              <button className="crm-danger-button" onClick={unassignLab} disabled={!selectedAssignedLabUsers.length || busyAction === 'unassign-lab'}>
+                {busyAction === 'unassign-lab' ? 'Removing...' : `Remove from ${selectedAssignedLabUsers.length || 0}`}
+              </button>
+              <button className="crm-primary-button" onClick={assignLab} disabled={!selectedLabUsers.length || busyAction === 'assign-lab'}>
+                {busyAction === 'assign-lab' ? 'Assigning...' : `Assign to ${selectedLabUsers.length || 0}`}
               </button>
             </div>
           </div>

@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const defaultBaseURL = import.meta.env.DEV ? 'http://localhost:5000' : '';
+const defaultBaseURL = import.meta.env.DEV
+  ? 'http://localhost:5000'
+  : 'https://leaderboard-backend-oihj.onrender.com';
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || defaultBaseURL,

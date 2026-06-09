@@ -9,7 +9,7 @@ export default function Labs() {
   const [labs, setLabs] = useState([]);
 
   useEffect(() => {
-    api.get('/api/labs').then(({ data }) => setLabs(data.labs));
+    api.get('/api/labs').then(({ data }) => setLabs(Array.isArray(data.labs) ? data.labs : [])).catch(() => setLabs([]));
   }, []);
 
   return (
