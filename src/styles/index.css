@@ -567,12 +567,25 @@ body {
   min-height: 44px;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   padding: 0 12px;
   color: #b9c5d8;
   border: 1px solid transparent;
   border-radius: 14px;
   background: transparent;
+}
+
+.crm-sidebar nav a svg,
+.crm-sidebar-brand svg,
+.crm-primary-button svg,
+.crm-danger-button svg,
+.crm-ghost-button svg,
+.crm-actions button svg,
+.crm-filter-group button svg,
+.crm-pagination button svg {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .crm-sidebar nav a:hover,
@@ -784,12 +797,41 @@ body {
 .crm-form input,
 .crm-form select,
 .crm-login-card input,
-.crm-user-row input {
+.crm-user-row input,
+.crm-search-field input,
+.crm-date-input {
   min-height: 43px;
   color: #eef6ff;
   background: rgba(3, 7, 18, 0.48);
   border-color: rgba(148, 163, 184, 0.16);
   border-radius: 11px;
+}
+
+.crm-search-field {
+  min-width: min(250px, 100%);
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(3, 7, 18, 0.36);
+}
+
+.crm-search-field svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.crm-search-field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
 }
 
 .crm-span-2 {
@@ -837,7 +879,6 @@ body {
 
 .crm-table-row span,
 .crm-user-row span {
-  display: block;
   margin-top: 4px;
   color: #94a3b8;
   font-size: 0.84rem;
@@ -857,6 +898,9 @@ body {
 
 .crm-actions button {
   min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0 10px;
   color: #dbeafe;
   border: 1px solid rgba(148, 163, 184, 0.16);
@@ -885,6 +929,10 @@ body {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.crm-heading-actions {
+  min-width: 0;
 }
 
 .crm-inline-link {
@@ -950,18 +998,28 @@ body {
 .crm-item-icon {
   width: 28px;
   height: 28px;
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   border-radius: 9px;
   background: rgba(110, 216, 255, 0.1);
+  font-size: 17px;
+  line-height: 1;
+  text-align: center;
+  transform: translateY(2px);
+
 }
 
 .crm-item-logo {
   width: 30px;
   height: 30px;
+  display: block;
   flex: 0 0 auto;
-  object-fit: cover;
+  box-sizing: border-box;
+  padding: 4px;
+  object-fit: contain;
+  object-position: center;
   border-radius: 9px;
   border: 1px solid rgba(110, 216, 255, 0.22);
   background: rgba(110, 216, 255, 0.08);
@@ -999,6 +1057,44 @@ body {
   border: 1px solid rgba(148, 163, 184, 0.16);
   border-radius: 12px;
   background: rgba(3, 7, 18, 0.48);
+}
+
+.crm-date-input {
+  width: 148px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.crm-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+  color: #94a3b8;
+  font-size: 0.84rem;
+}
+
+.crm-pagination button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: #dbeafe;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.crm-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.crm-pagination strong {
+  min-width: 54px;
+  color: #eef6ff;
+  text-align: center;
 }
 
 .crm-modal-backdrop {
@@ -2200,6 +2296,18 @@ select:focus {
 
   .crm-actions {
     justify-content: flex-start;
+  }
+
+  .crm-heading-actions,
+  .crm-pagination,
+  .crm-modal-actions {
+    justify-content: flex-start;
+  }
+
+  .crm-search-field,
+  .crm-queue-select,
+  .crm-date-input {
+    width: 100%;
   }
 
   .badge-strip {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Clock3, Database, GitPullRequest, LayoutDashboard, LogOut, Medal, RefreshCw, ScrollText, Settings, Trophy, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock3, Database, GitPullRequest, LayoutDashboard, LogOut, Medal, RefreshCw, ScrollText, Search, Settings, Trophy, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -38,6 +38,53 @@ const isUrl = (value = '') => /^https?:\/\//i.test(value);
 const renderIcon = (value, fallback = '•') =>
   isUrl(value) ? <img className="crm-item-logo" src={value} alt="" /> : <span className="crm-item-icon">{value || fallback}</span>;
 
+const PAGE_SIZE = 8;
+const LOG_PAGE_SIZE = 12;
+
+const normalize = (value = '') => String(value).toLowerCase().trim();
+
+const matchesSearch = (item, fields, term) => {
+  const query = normalize(term);
+  if (!query) return true;
+  return fields.some((field) => normalize(field(item)).includes(query));
+};
+
+const paginate = (items, page, pageSize = PAGE_SIZE) => {
+  const pages = Math.max(Math.ceil(items.length / pageSize), 1);
+  const safePage = Math.min(Math.max(page, 1), pages);
+  return {
+    page: safePage,
+    pages,
+    items: items.slice((safePage - 1) * pageSize, safePage * pageSize)
+  };
+};
+
+function SearchInput({ value, onChange, placeholder }) {
+  return (
+    <label className="crm-search-field">
+      <Search size={16} />
+      <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+    </label>
+  );
+}
+
+function Pagination({ page, pages, total, onPageChange }) {
+  if (pages <= 1) return null;
+
+  return (
+    <div className="crm-pagination">
+      <span>{total} items</span>
+      <button type="button" onClick={() => onPageChange(page - 1)} disabled={page <= 1} aria-label="Previous page">
+        <ChevronLeft size={16} />
+      </button>
+      <strong>{page} / {pages}</strong>
+      <button type="button" onClick={() => onPageChange(page + 1)} disabled={page >= pages} aria-label="Next page">
+        <ChevronRight size={16} />
+      </button>
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const { admin, adminLogin, logout } = useAuth();
   const [labs, setLabs] = useState([]);
@@ -60,28 +107,55 @@ export default function AdminPanel() {
   const [selectedAssignedLabUsers, setSelectedAssignedLabUsers] = useState([]);
   const [reviewFilter, setReviewFilter] = useState('all');
   const [reviewLabFilter, setReviewLabFilter] = useState('all');
+  const [labSearch, setLabSearch] = useState('');
+  const [badgeSearch, setBadgeSearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [submissionSearch, setSubmissionSearch] = useState('');
+  const [assignBadgeSearch, setAssignBadgeSearch] = useState('');
+  const [assignLabSearch, setAssignLabSearch] = useState('');
+  const [pages, setPages] = useState({ labs: 1, badges: 1, users: 1, submissions: 1 });
+  const [logFilters, setLogFilters] = useState({ search: '', category: 'all', from: '', to: '', page: 1 });
+  const [logMeta, setLogMeta] = useState({ page: 1, pages: 1, total: 0, categories: [] });
   const [busyAction, setBusyAction] = useState('');
 
-  const load = async () => {
+  const load = async (logOverride = {}) => {
     if (!admin) return;
+
+    const nextLogFilters = { ...logFilters, ...logOverride };
+    const logParams = {
+      page: nextLogFilters.page,
+      limit: LOG_PAGE_SIZE
+    };
+    if (nextLogFilters.category !== 'all') logParams.type = nextLogFilters.category;
+    if (nextLogFilters.from) logParams.from = nextLogFilters.from;
+    if (nextLogFilters.to) logParams.to = nextLogFilters.to;
 
     const [{ data: labData }, { data: submissionData }, { data: userData }, { data: badgeData }, { data: logData }] = await Promise.all([
       api.get('/api/labs'),
       api.get('/api/submissions'),
       api.get('/api/admin/users'),
       api.get('/api/badges'),
-      api.get('/api/admin/logs')
+      api.get('/api/admin/logs', { params: logParams })
     ]);
     setLabs(Array.isArray(labData.labs) ? labData.labs : []);
     setSubmissions(Array.isArray(submissionData.submissions) ? submissionData.submissions : []);
     setUsers(Array.isArray(userData.users) ? userData.users : []);
     setBadges(Array.isArray(badgeData.badges) ? badgeData.badges : []);
     setLogs(Array.isArray(logData.logs) ? logData.logs : []);
+    setLogMeta(logData.meta || { page: 1, pages: 1, total: logData.logs?.length || 0, categories: [] });
   };
 
   useEffect(() => {
     load();
-  }, [admin]);
+  }, [admin, logFilters.category, logFilters.from, logFilters.to, logFilters.page]);
+
+  const updateListPage = (key, page) => {
+    setPages((current) => ({ ...current, [key]: Math.max(page, 1) }));
+  };
+
+  const updateLogFilters = (patch) => {
+    setLogFilters((current) => ({ ...current, ...patch, page: patch.page || 1 }));
+  };
 
   useEffect(() => {
     if (!admin) return undefined;
@@ -300,12 +374,14 @@ export default function AdminPanel() {
     setAssigningBadge(badge);
     setSelectedUsers([]);
     setSelectedAssignedUsers([]);
+    setAssignBadgeSearch('');
   };
 
   const openAssignLab = (lab) => {
     setAssigningLab(lab);
     setSelectedLabUsers([]);
     setSelectedAssignedLabUsers([]);
+    setAssignLabSearch('');
   };
 
   const toggleSelectedUser = (id) => {
@@ -414,12 +490,71 @@ export default function AdminPanel() {
     load();
   };
 
+  const filteredLabs = labs.filter((lab) =>
+    matchesSearch(lab, [
+      (item) => item.title,
+      (item) => item.repoOwner,
+      (item) => item.repoName,
+      (item) => item.difficulty
+    ], labSearch)
+  );
+  const filteredBadges = badges.filter((badge) =>
+    matchesSearch(badge, [
+      (item) => item.title,
+      (item) => item.description,
+      (item) => item.rarity
+    ], badgeSearch)
+  );
+  const filteredUsers = users.filter((user) =>
+    matchesSearch(user, [
+      (item) => item.displayName,
+      (item) => item.username,
+      (item) => item.connectedGithub,
+      (item) => item.email,
+      (item) => item.rank,
+      (item) => item.totalPoints
+    ], userSearch)
+  );
   const pendingSubmissions = submissions.filter((submission) => (submission.reviewStatus || 'pending') === 'pending').length;
-  const visibleSubmissions = submissions.filter((submission) => {
+  const filteredSubmissions = submissions.filter((submission) => {
     const matchesStatus = reviewFilter === 'all' || (submission.reviewStatus || 'pending') === reviewFilter;
     const matchesLab = reviewLabFilter === 'all' || submission.labId?._id === reviewLabFilter;
-    return matchesStatus && matchesLab;
+    const matchesQuery = matchesSearch(submission, [
+      (item) => item.userId?.username,
+      (item) => item.labId?.title,
+      (item) => item.repoOwner,
+      (item) => item.repoName,
+      (item) => item.prNumber,
+      (item) => item.status,
+      (item) => item.reviewStatus
+    ], submissionSearch);
+    return matchesStatus && matchesLab && matchesQuery;
   });
+  const filteredLogs = logs.filter((log) =>
+    matchesSearch(log, [
+      (item) => item.message,
+      (item) => item.actor,
+      (item) => item.type
+    ], logFilters.search)
+  );
+  const visibleLabs = paginate(filteredLabs, pages.labs);
+  const visibleBadges = paginate(filteredBadges, pages.badges);
+  const visibleUsers = paginate(filteredUsers, pages.users);
+  const visibleSubmissions = paginate(filteredSubmissions, pages.submissions);
+  const assignBadgeUsers = users.filter((user) =>
+    matchesSearch(user, [
+      (item) => item.displayName,
+      (item) => item.username,
+      (item) => item.totalPoints
+    ], assignBadgeSearch)
+  );
+  const assignLabUsers = users.filter((user) =>
+    matchesSearch(user, [
+      (item) => item.displayName,
+      (item) => item.username,
+      (item) => item.totalPoints
+    ], assignLabSearch)
+  );
   const hasAssignedBadge = (user, badge) =>
     user.badges?.some((entry) => String(entry.item?._id || entry.item) === String(badge?._id));
   const hasAssignedLab = (user, lab) =>
@@ -594,10 +729,20 @@ export default function AdminPanel() {
                 <span className="crm-kicker">Active tasks</span>
                 <h2>Labs</h2>
               </div>
-              <span className="crm-count">{labs.length}</span>
+              <div className="crm-heading-actions">
+                <SearchInput
+                  value={labSearch}
+                  onChange={(value) => {
+                    setLabSearch(value);
+                    updateListPage('labs', 1);
+                  }}
+                  placeholder="Search labs"
+                />
+                <span className="crm-count">{filteredLabs.length}</span>
+              </div>
             </div>
             <div className="crm-table">
-              {labs.map((lab) => (
+              {visibleLabs.items.map((lab) => (
                 <div className="crm-table-row" key={lab._id}>
                   <div>
                     <strong>{renderIcon(lab.icon, '🧪')}{lab.title}</strong>
@@ -615,6 +760,7 @@ export default function AdminPanel() {
                 </div>
               ))}
             </div>
+            <Pagination page={visibleLabs.page} pages={visibleLabs.pages} total={filteredLabs.length} onPageChange={(page) => updateListPage('labs', page)} />
           </article>
         </section>
 
@@ -676,10 +822,20 @@ export default function AdminPanel() {
                 <span className="crm-kicker">Manual XP</span>
                 <h2>Side Quests</h2>
               </div>
-              <span className="crm-count">{badges.length}</span>
+              <div className="crm-heading-actions">
+                <SearchInput
+                  value={badgeSearch}
+                  onChange={(value) => {
+                    setBadgeSearch(value);
+                    updateListPage('badges', 1);
+                  }}
+                  placeholder="Search quests"
+                />
+                <span className="crm-count">{filteredBadges.length}</span>
+              </div>
             </div>
             <div className="crm-table">
-              {badges.map((badge) => (
+              {visibleBadges.items.map((badge) => (
                 <div className="crm-table-row" key={badge._id}>
                   <div>
                     <strong>{renderIcon(badge.icon, '🫡')}{badge.title}</strong>
@@ -694,6 +850,7 @@ export default function AdminPanel() {
                 </div>
               ))}
             </div>
+            <Pagination page={visibleBadges.page} pages={visibleBadges.pages} total={filteredBadges.length} onPageChange={(page) => updateListPage('badges', page)} />
           </article>
         </section>
 
@@ -703,15 +860,25 @@ export default function AdminPanel() {
               <span className="crm-kicker">People and scoring</span>
               <h2>Users</h2>
             </div>
-            <span className="crm-count">{users.length}</span>
+            <div className="crm-heading-actions">
+              <SearchInput
+                value={userSearch}
+                onChange={(value) => {
+                  setUserSearch(value);
+                  updateListPage('users', 1);
+                }}
+                placeholder="Search users"
+              />
+              <span className="crm-count">{filteredUsers.length}</span>
+            </div>
           </div>
           <div className="crm-user-table">
-            {users.map((user) => (
+            {visibleUsers.items.map((user) => (
               <div className="crm-user-row" key={user._id}>
                 <img src={resolveAvatar(user.avatarUrl)} alt={user.username} />
                 <Link to={`/profile/${user.username}`}>
-                  <strong>@{user.username}</strong>
-                  <span>Rank #{user.rank || '-'}</span>
+                  <strong>{user.displayName || user.username}</strong>
+                  <span>@{user.username} - Rank #{user.rank || '-'}</span>
                 </Link>
                 <input
                   type="number"
@@ -722,6 +889,7 @@ export default function AdminPanel() {
               </div>
             ))}
           </div>
+          <Pagination page={visibleUsers.page} pages={visibleUsers.pages} total={filteredUsers.length} onPageChange={(page) => updateListPage('users', page)} />
         </section>
 
         <section className="crm-panel" id="submissions">
@@ -731,10 +899,21 @@ export default function AdminPanel() {
               <h2>Review queue</h2>
             </div>
             <div className="crm-heading-actions">
+              <SearchInput
+                value={submissionSearch}
+                onChange={(value) => {
+                  setSubmissionSearch(value);
+                  updateListPage('submissions', 1);
+                }}
+                placeholder="Search PRs"
+              />
               <select
                 className="crm-queue-select"
                 value={reviewLabFilter}
-                onChange={(event) => setReviewLabFilter(event.target.value)}
+                onChange={(event) => {
+                  setReviewLabFilter(event.target.value);
+                  updateListPage('submissions', 1);
+                }}
                 aria-label="Filter review queue by lab"
               >
                 <option value="all">All labs</option>
@@ -749,7 +928,10 @@ export default function AdminPanel() {
                   <button
                     className={reviewFilter === filter ? 'active' : ''}
                     key={filter}
-                    onClick={() => setReviewFilter(filter)}
+                    onClick={() => {
+                      setReviewFilter(filter);
+                      updateListPage('submissions', 1);
+                    }}
                     type="button"
                   >
                     {filter}
@@ -763,7 +945,7 @@ export default function AdminPanel() {
             </div>
           </div>
           <div className="crm-table">
-            {visibleSubmissions.map((submission) => (
+            {visibleSubmissions.items.map((submission) => (
               <div
                 className={`crm-table-row review-row ${submission.reviewStatus || 'pending'}`}
                 key={submission._id}
@@ -802,6 +984,7 @@ export default function AdminPanel() {
               </div>
             ))}
           </div>
+          <Pagination page={visibleSubmissions.page} pages={visibleSubmissions.pages} total={filteredSubmissions.length} onPageChange={(page) => updateListPage('submissions', page)} />
         </section>
 
         <section className="crm-panel" id="logs">
@@ -810,11 +993,43 @@ export default function AdminPanel() {
               <span className="crm-kicker">System history</span>
               <h2>Logs</h2>
             </div>
-            <span className="crm-count">{logs.length}</span>
+            <div className="crm-heading-actions">
+              <SearchInput
+                value={logFilters.search}
+                onChange={(value) => updateLogFilters({ search: value })}
+                placeholder="Search logs"
+              />
+              <select
+                className="crm-queue-select"
+                value={logFilters.category}
+                onChange={(event) => updateLogFilters({ category: event.target.value })}
+                aria-label="Filter logs by category"
+              >
+                <option value="all">All categories</option>
+                {logMeta.categories.map((category) => (
+                  <option key={category} value={category}>{category}</option>
+                ))}
+              </select>
+              <input
+                className="crm-date-input"
+                type="date"
+                value={logFilters.from}
+                onChange={(event) => updateLogFilters({ from: event.target.value })}
+                aria-label="Logs from date"
+              />
+              <input
+                className="crm-date-input"
+                type="date"
+                value={logFilters.to}
+                onChange={(event) => updateLogFilters({ to: event.target.value })}
+                aria-label="Logs to date"
+              />
+              <span className="crm-count">{logMeta.total || filteredLogs.length}</span>
+            </div>
           </div>
           <div className="crm-log-list">
-            {logs.length ? (
-              logs.map((log) => (
+            {filteredLogs.length ? (
+              filteredLogs.map((log) => (
                 <article className="crm-log-row" key={log._id}>
                   <span className="crm-log-icon"><Clock3 size={16} /></span>
                   <div>
@@ -830,6 +1045,7 @@ export default function AdminPanel() {
               <p className="muted">No logs yet. Actions like point changes, PR syncs, approvals, and deletions will appear here.</p>
             )}
           </div>
+          <Pagination page={logMeta.page || 1} pages={logMeta.pages || 1} total={logMeta.total || filteredLogs.length} onPageChange={(page) => setLogFilters((current) => ({ ...current, page }))} />
         </section>
       </div>
 
@@ -843,8 +1059,9 @@ export default function AdminPanel() {
               </div>
               <span className="crm-count">{assigningBadge.pointsRequired || 0} XP</span>
             </div>
+            <SearchInput value={assignBadgeSearch} onChange={setAssignBadgeSearch} placeholder="Search users" />
             <div className="crm-assign-list">
-              {users.map((user) => {
+              {assignBadgeUsers.map((user) => {
                 const alreadyAssigned = hasAssignedBadge(user, assigningBadge);
                 return (
                   <label className={`crm-assign-user ${alreadyAssigned ? 'assigned' : ''}`} key={user._id}>
@@ -895,8 +1112,9 @@ export default function AdminPanel() {
               </div>
               <span className="crm-count">{assigningLab.points || 0} XP</span>
             </div>
+            <SearchInput value={assignLabSearch} onChange={setAssignLabSearch} placeholder="Search users" />
             <div className="crm-assign-list">
-              {users.map((user) => {
+              {assignLabUsers.map((user) => {
                 const alreadyAssigned = hasAssignedLab(user, assigningLab);
                 return (
                   <label className={`crm-assign-user ${alreadyAssigned ? 'assigned' : ''}`} key={user._id}>
